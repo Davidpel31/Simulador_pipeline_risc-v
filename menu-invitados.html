@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Escoge tu menú</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Nunito+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#F3EADF; --paper:#FFFBF6; --ink:#2A1A17; --muted:#6E5A55;
+  --wine:#7E1D26; --wine-soft:#F4DEDC; --line:#E3D3C6; --check:#8B2A30;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#1E1514; --paper:#2A1F1D; --ink:#F4EAE4; --muted:#BFA9A2;
+    --wine:#E07C84; --wine-soft:#44282A; --line:#463532; --check:#6E2228;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#1E1514; --paper:#2A1F1D; --ink:#F4EAE4; --muted:#BFA9A2;
+  --wine:#E07C84; --wine-soft:#44282A; --line:#463532; --check:#6E2228;
+}
+*,*::before,*::after{box-sizing:inherit}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{
+  margin:0;background:var(--bg);color:var(--ink);
+  font-family:"Nunito Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  font-size:16px;line-height:1.45;
+}
+.checks{
+  height:18px;
+  background:
+    conic-gradient(var(--check) 25%, transparent 0 50%, var(--check) 0 75%, transparent 0)
+    0 0/18px 18px;
+}
+main{max-width:560px;margin:0 auto;padding:28px 18px 48px}
+h1{
+  font-family:"DM Serif Display",Georgia,serif;font-weight:400;
+  font-size:2.3rem;line-height:1.05;margin:4px 0 10px;color:var(--wine);
+}
+.intro{color:var(--muted);margin:0 0 24px}
+label.name{display:block;font-weight:700;margin-bottom:6px}
+input[type=text]{
+  width:100%;font:inherit;padding:12px 14px;border-radius:10px;
+  border:1.5px solid var(--line);background:var(--paper);color:var(--ink);
+}
+input[type=text]:focus{outline:3px solid var(--wine-soft);border-color:var(--wine)}
+fieldset{border:0;padding:0;margin:30px 0 0}
+legend{
+  font-family:"DM Serif Display",Georgia,serif;font-size:1.45rem;
+  color:var(--ink);padding:0;margin-bottom:10px;
+}
+.opt{
+  display:flex;gap:12px;align-items:flex-start;
+  background:var(--paper);border:1.5px solid var(--line);
+  border-radius:12px;padding:12px 14px;margin-bottom:8px;cursor:pointer;
+}
+.opt input{position:absolute;opacity:0;pointer-events:none}
+.dot{
+  flex:none;width:20px;height:20px;border-radius:50%;margin-top:2px;
+  border:2px solid var(--muted);display:grid;place-items:center;
+}
+.opt:has(input:checked){border-color:var(--wine);background:var(--wine-soft)}
+.opt:has(input:checked) .dot{border-color:var(--wine)}
+.opt:has(input:checked) .dot::after{content:"";width:10px;height:10px;border-radius:50%;background:var(--wine)}
+.opt:has(input:focus-visible){outline:3px solid var(--wine);outline-offset:2px}
+.opt b{display:block}
+.opt small{color:var(--muted);display:block;font-size:.88rem}
+.sauce{margin:4px 0 12px 32px;display:none}
+.sauce.show{display:block}
+.sauce p{margin:0 0 6px;font-weight:700;font-size:.95rem}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{position:relative}
+.chip input{position:absolute;opacity:0}
+.chip span{
+  display:inline-block;padding:7px 14px;border-radius:999px;cursor:pointer;
+  border:1.5px solid var(--line);background:var(--paper);font-size:.92rem;
+}
+.chip input:checked+span{background:var(--wine);border-color:var(--wine);color:var(--paper)}
+.chip input:focus-visible+span{outline:3px solid var(--wine);outline-offset:2px}
+.error{color:var(--wine);font-weight:700;min-height:1.4em;margin:22px 0 8px}
+button{
+  font:inherit;font-weight:700;border:0;border-radius:12px;cursor:pointer;
+  padding:15px 18px;width:100%;
+}
+.primary{background:var(--wine);color:var(--paper);font-size:1.05rem}
+.ghost{background:transparent;color:var(--wine);border:1.5px solid var(--wine);margin-top:12px}
+button:focus-visible{outline:3px solid var(--ink);outline-offset:2px}
+
+/* Resumen para captura */
+#resumen{display:none}
+#resumen.show{display:block}
+.ticket{
+  background:var(--paper);border-radius:14px;overflow:hidden;
+  border:1.5px solid var(--line);
+}
+.ticket .inner{padding:22px 20px 18px}
+.ticket h2{
+  font-family:"DM Serif Display",Georgia,serif;font-weight:400;
+  font-size:1.9rem;margin:0 0 2px;color:var(--wine);line-height:1.1;
+}
+.ticket .sub{color:var(--muted);margin:0 0 16px;font-size:.92rem}
+.row{display:flex;justify-content:space-between;gap:12px;padding:10px 0;border-top:1px dashed var(--line)}
+.row span{color:var(--muted);font-size:.9rem;flex:none}
+.row strong{text-align:right}
+.codes{
+  margin-top:14px;padding:10px 12px;border-radius:10px;background:var(--wine-soft);
+  text-align:center;font-weight:700;letter-spacing:.04em;
+}
+.hint{text-align:center;color:var(--muted);margin:18px 0 0;font-size:.95rem}
+@media (prefers-reduced-motion:no-preference){
+  #resumen.show .ticket{animation:pop .35s ease-out}
+  @keyframes pop{from{transform:translateY(10px);opacity:0}to{transform:none;opacity:1}}
+}
+</style>
+</head>
+<body>
+<div class="checks" aria-hidden="true"></div>
+
+<main>
+  <section id="formulario">
+    <h1>Escoge tu menú</h1>
+    <p class="intro">Marca una opción en cada parte. Al final te sale un resumen: tómale captura y mándala por WhatsApp.</p>
+
+    <label class="name" for="nombre">Tu nombre</label>
+    <input type="text" id="nombre" autocomplete="name" placeholder="Ej: Ana Gómez">
+
+    <div id="secciones"></div>
+
+    <p class="error" id="error" role="alert"></p>
+    <button class="primary" id="ver">Ver mi pedido</button>
+  </section>
+
+  <section id="resumen" aria-live="polite">
+    <div class="ticket">
+      <div class="checks" aria-hidden="true"></div>
+      <div class="inner">
+        <h2 id="r-nombre"></h2>
+        <p class="sub">Mi menú escogido</p>
+        <div id="r-filas"></div>
+        <div class="codes" id="r-codigos"></div>
+      </div>
+    </div>
+    <p class="hint">📸 Toma captura de pantalla y envíala por WhatsApp.</p>
+    <button class="ghost" id="editar">Cambiar algo</button>
+    <button class="ghost" id="otra">Escoger para otra persona</button>
+  </section>
+</main>
+
+<script>
+const MENU = [
+  {id:"C", titulo:"Cóctel de bienvenida", opciones:[
+    ["C1","Copa de tinto de verano",""],
+    ["C2","Soda saborizada",""]
+  ]},
+  {id:"E", titulo:"Entrada", opciones:[
+    ["E1","Crostino Caprese","Pan, mozzarella, tomate, albahaca y aceite de oliva"],
+    ["E2","Bruschetta","Pan, tomate, albahaca y aceite de oliva"]
+  ]},
+  {id:"P", titulo:"Plato fuerte", opciones:[
+    ["P1","Pizza Stracciatella de Burrata","Mozzarella, burrata, tomate, balsámico y pesto"],
+    ["P2","Pasta Marinera","Calamares, camarones, mejillones, vino blanco y ajo"],
+    ["P3","Pollo Trattoria","Pollo en crema con champiñones y queso azul. Con puré y ensalada"],
+    ["P4","Scaloppina di Manzo al Vino","Carne premium en reducción de vino tinto. Con puré y ensalada"],
+    ["P5","Lasagna Mixta","Boloñesa, pollo, tocineta, bechamel y quesos"],
+    ["P6","Lasagna Bianca","Pollo, espinaca, champiñones y quesos en crema"]
+  ]},
+  {id:"D", titulo:"Postre", opciones:[
+    ["D1","Pannacotta",""],
+    ["D2","Tres leches",""],
+    ["D3","Tiramisú",""],
+    ["D4","Vaso de helado","Según disponibilidad"]
+  ]},
+  {id:"B", titulo:"Bebida", opciones:[
+    ["B1","Limonada natural",""],
+    ["B2","Limonada de hierbabuena",""],
+    ["B3","Gaseosa",""]
+  ]}
+];
+const SALSAS = ["Pomodoro","Blanca","Rosé","Aceite de oliva"];
+
+const cont = document.getElementById("secciones");
+MENU.forEach(sec=>{
+  const fs = document.createElement("fieldset");
+  fs.innerHTML = `<legend>${sec.titulo}</legend>` + sec.opciones.map(([cod,nom,desc])=>`
+    <label class="opt">
+      <input type="radio" name="${sec.id}" value="${cod}">
+      <span class="dot"></span>
+      <span><b>${nom}</b>${desc?`<small>${desc}</small>`:""}</span>
+    </label>
+    ${cod==="P2"?`<div class="sauce" id="salsa-box"><p>¿Qué salsa quieres?</p><div class="chips">${
+      SALSAS.map(s=>`<label class="chip"><input type="radio" name="salsa" value="${s}"><span>${s}</span></label>`).join("")
+    }</div></div>`:""}`).join("");
+  cont.appendChild(fs);
+});
+
+document.querySelectorAll('input[name="P"]').forEach(r=>r.addEventListener("change",()=>{
+  document.getElementById("salsa-box").classList.toggle("show", r.value==="P2" && r.checked);
+}));
+
+const $ = id=>document.getElementById(id);
+function elegido(n){const el=document.querySelector(`input[name="${n}"]:checked`);return el?el.value:null}
+
+$("ver").addEventListener("click",()=>{
+  const nombre = $("nombre").value.trim();
+  if(!nombre){ $("error").textContent="Escribe tu nombre para saber de quién es el pedido."; $("nombre").focus(); return; }
+  for(const sec of MENU){
+    if(!elegido(sec.id)){ $("error").textContent=`Falta escoger: ${sec.titulo.toLowerCase()}.`; document.querySelector(`input[name="${sec.id}"]`).closest("fieldset").scrollIntoView({behavior:"smooth",block:"start"}); return; }
+  }
+  const salsa = elegido("salsa");
+  if(elegido("P")==="P2" && !salsa){ $("error").textContent="Escoge la salsa de la Pasta Marinera."; $("salsa-box").scrollIntoView({behavior:"smooth",block:"center"}); return; }
+  $("error").textContent="";
+
+  const codigos=[]; let filas="";
+  MENU.forEach(sec=>{
+    const cod=elegido(sec.id);
+    const op=sec.opciones.find(o=>o[0]===cod);
+    let txt=op[1]; let c=cod;
+    if(cod==="P2"){ txt+=` (salsa ${salsa.toLowerCase()})`; c+=" "+salsa.toLowerCase(); }
+    codigos.push(c);
+    filas+=`<div class="row"><span>${sec.titulo}</span><strong>${txt}</strong></div>`;
+  });
+  $("r-nombre").textContent=nombre;
+  $("r-filas").innerHTML=filas;
+  $("r-codigos").textContent=codigos.join(" · ");
+  $("formulario").style.display="none";
+  $("resumen").classList.add("show");
+  window.scrollTo({top:0});
+});
+
+$("editar").addEventListener("click",()=>{
+  $("resumen").classList.remove("show");
+  $("formulario").style.display="";
+  window.scrollTo({top:0});
+});
+$("otra").addEventListener("click",()=>{
+  document.querySelectorAll("input[type=radio]").forEach(r=>r.checked=false);
+  $("salsa-box").classList.remove("show");
+  $("nombre").value="";
+  $("resumen").classList.remove("show");
+  $("formulario").style.display="";
+  window.scrollTo({top:0});
+  $("nombre").focus();
+});
+</script>
+</body>
+</html>
