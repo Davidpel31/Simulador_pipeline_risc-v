@@ -1,0 +1,680 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Simulador del pipeline RISC-V</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#E7ECF0; --panel:#F6F8FA; --ink:#1E2333; --muted:#687085; --wire:#5D5F9C; --wire-dim:#B9BCD6; --line:#CDD3DE;
+  --fwd:#D38700; --stall:#2C76BC; --flush:#C4303A; --br:#13917F; --chip:#FFFFFF;
+  --sans:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  color-scheme:light;
+  box-sizing:border-box; padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --paper:#151925; --panel:#1D2231; --ink:#E4E7F0; --muted:#98A0B5; --wire:#A3A6E6; --wire-dim:#3C4160; --line:#2F3549;
+    --fwd:#F0A92A; --stall:#5AA6EA; --flush:#EE5A62; --br:#3CC4AE; --chip:#252B3D; color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#151925; --panel:#1D2231; --ink:#E4E7F0; --muted:#98A0B5; --wire:#A3A6E6; --wire-dim:#3C4160; --line:#2F3549;
+  --fwd:#F0A92A; --stall:#5AA6EA; --flush:#EE5A62; --br:#3CC4AE; --chip:#252B3D; color-scheme:dark;
+}
+*,*::before,*::after{box-sizing:inherit}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);font-size:15px;line-height:1.5}
+.wrap{max-width:1180px;margin:0 auto;padding:18px 16px 40px}
+header.top{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap;border-left:5px solid var(--wire);padding-left:14px;margin-bottom:16px}
+h1{font-size:clamp(24px,4.4vw,38px);line-height:1.1;margin:0;font-weight:700;color:var(--wire);letter-spacing:-.01em}
+.sub{margin:4px 0 0;color:var(--muted);font-size:14px}
+button,select,input,textarea{font:inherit;color:inherit}
+.btn{border:1.5px solid var(--wire);background:transparent;color:var(--wire);border-radius:8px;padding:7px 13px;font-weight:600;cursor:pointer;min-height:38px}
+.btn:hover{background:color-mix(in srgb,var(--wire) 12%,transparent)}
+.btn.solid{background:var(--wire);color:var(--panel)}
+.btn:focus-visible,select:focus-visible,input:focus-visible,textarea:focus-visible,.icon:focus-visible{outline:3px solid var(--fwd);outline-offset:2px}
+.bar{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:color-mix(in srgb,var(--paper) 92%,transparent);backdrop-filter:blur(6px);padding:10px 0;margin-bottom:6px;border-bottom:1px solid var(--line)}
+.ctrl{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.icon{width:42px;height:42px;border-radius:50%;border:1.5px solid var(--wire);background:var(--panel);color:var(--wire);font-size:16px;cursor:pointer;display:grid;place-items:center}
+.icon.play{background:var(--wire);color:var(--panel);width:48px;height:48px;font-size:18px}
+.icon:disabled{opacity:.35;cursor:default}
+.cyc{font-family:var(--mono);font-weight:600;font-size:15px;min-width:118px}
+.cyc small{color:var(--muted);font-weight:400}
+input[type=range]{flex:1;min-width:140px;accent-color:var(--wire)}
+.ctrl select{border:1px solid var(--line);background:var(--panel);border-radius:8px;padding:6px 8px;min-height:38px}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.tag{font-size:12.5px;border-radius:99px;padding:2px 10px;border:1px solid var(--line);background:var(--panel);color:var(--muted)}
+.tag.on{color:var(--ink)}
+.tag b{font-weight:600}
+section{margin-top:22px}
+h2{font-size:19px;margin:0 0 10px;font-weight:600}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px}
+.dpwrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+#dp{display:block;width:100%;min-width:780px;height:auto}
+#dp text{font-family:var(--sans)}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:13px;color:var(--muted);margin-top:8px}
+.legend i{display:inline-block;width:18px;height:4px;border-radius:2px;vertical-align:middle;margin-right:6px}
+.grid2{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:18px}
+@media (max-width:860px){.grid2{grid-template-columns:minmax(0,1fr)}}
+.log{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.log li{padding:8px 10px 8px 12px;border-left:4px solid var(--wire-dim);background:var(--paper);border-radius:0 8px 8px 0;font-size:14.5px;max-width:72ch}
+.log li.fwd{border-color:var(--fwd)} .log li.stall{border-color:var(--stall)} .log li.flush,.log li.exc{border-color:var(--flush)}
+.log li.exc{background:color-mix(in srgb,var(--flush) 12%,var(--paper))}
+.log li.warn{border-color:var(--fwd);background:color-mix(in srgb,var(--fwd) 12%,var(--paper))}
+.log li.done{border-color:var(--br)}
+.log .k{font-weight:600;margin-right:6px}
+.tablewrap{overflow-x:auto;-webkit-overflow-scrolling:touch;border:1px solid var(--line);border-radius:10px;background:var(--panel)}
+table.mc{border-collapse:separate;border-spacing:0;font-size:13px;min-width:100%}
+table.mc th,table.mc td{padding:5px 4px;text-align:center;border-bottom:1px solid var(--line);white-space:nowrap}
+table.mc th{font-weight:600;color:var(--muted);font-family:var(--mono);font-size:12px;position:sticky;top:0;background:var(--panel)}
+table.mc th.now{color:var(--ink);background:color-mix(in srgb,var(--wire) 18%,var(--panel))}
+table.mc td.lbl{text-align:left;position:sticky;left:0;background:var(--panel);font-family:var(--mono);padding-left:10px;padding-right:12px;z-index:1;border-right:1px solid var(--line)}
+td.lbl .pc{color:var(--muted);margin-right:8px;font-size:11.5px}
+tr.bub td.lbl{font-style:italic;color:var(--muted)}
+td.st span{display:inline-block;min-width:40px;padding:2px 4px;border-radius:5px;font-weight:600;font-family:var(--mono);font-size:12px;color:#fff}
+td.st.stall span{background-image:repeating-linear-gradient(45deg,rgba(255,255,255,.35) 0 4px,transparent 4px 8px);outline:2px solid var(--stall)}
+td.st.flush span{background:transparent!important;color:var(--flush);text-decoration:line-through;outline:1.5px dashed var(--flush)}
+td.st.exc span{background:var(--flush)!important;outline:2px solid var(--flush)}
+td.st.bub span{background:transparent!important;color:var(--muted);outline:1px dashed var(--muted)}
+td.nowc{background:color-mix(in srgb,var(--wire) 9%,transparent)}
+.regs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;font-family:var(--mono);font-size:12.5px}
+@media (max-width:520px){.regs{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.regs div{padding:3px 6px;border-radius:5px;background:var(--paper);display:flex;justify-content:space-between;gap:6px;overflow:hidden}
+.regs div span:last-child{overflow:hidden;text-overflow:ellipsis}
+.regs div.ch{background:color-mix(in srgb,var(--br) 25%,var(--paper));font-weight:600}
+.regs div b{color:var(--muted);font-weight:400}
+.kv{font-family:var(--mono);font-size:13px;display:grid;gap:4px}
+.kv div{display:flex;justify-content:space-between;gap:10px;padding:3px 6px;background:var(--paper);border-radius:5px}
+.kv div.ch{background:color-mix(in srgb,var(--br) 25%,var(--paper));font-weight:600}
+.exc-box{border-left:4px solid var(--line);padding:8px 10px;background:var(--paper);border-radius:0 8px 8px 0;font-size:14px}
+.exc-box.set{border-color:var(--flush)}
+.exc-box code{font-family:var(--mono)}
+.muted{color:var(--muted)}
+.prog{font-family:var(--mono);font-size:13.5px;margin:0;padding:0;list-style:none;counter-reset:n}
+.prog li{display:flex;gap:10px;padding:2px 6px;border-radius:5px}
+.prog li .a{color:var(--muted);min-width:84px}
+.prog li.bad{color:var(--flush)}
+/* admin */
+.admin{border:2px solid var(--wire);border-radius:12px;padding:16px;background:var(--panel)}
+.admin h2{color:var(--wire)}
+.form{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:16px}
+@media (max-width:860px){.form{grid-template-columns:minmax(0,1fr)}}
+label.f{display:block;font-weight:600;font-size:14px;margin-bottom:4px}
+.hint{font-size:13px;color:var(--muted);margin:3px 0 0}
+textarea,input[type=text],input[type=password]{width:100%;border:1px solid var(--line);background:var(--paper);border-radius:8px;padding:8px 10px}
+textarea{font-family:var(--mono);font-size:13.5px;line-height:1.55;resize:vertical}
+.field{margin-bottom:12px}
+.sw{display:flex;align-items:center;gap:10px;padding:8px 0;cursor:pointer}
+.sw input{width:20px;height:20px;accent-color:var(--wire)}
+.errs{margin:8px 0 0;padding:8px 12px;border-left:4px solid var(--flush);background:color-mix(in srgb,var(--flush) 10%,var(--paper));border-radius:0 8px 8px 0;font-size:13.5px}
+.errs.warn{border-color:var(--fwd);background:color-mix(in srgb,var(--fwd) 10%,var(--paper))}
+.errs ul{margin:4px 0 0;padding-left:18px}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.pin{display:none;gap:8px;align-items:center;margin-top:8px}
+.pin.show{display:flex}
+.pin input{width:140px}
+.hidden{display:none!important}
+.count{font-family:var(--mono);font-size:13px;color:var(--muted)}
+.count.over{color:var(--flush);font-weight:600}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1>Pipeline RISC-V con excepciones</h1>
+      <p class="sub">Simulador ciclo a ciclo del datapath canalizado de 5 etapas — Patterson &amp; Hennessy, capítulo 4</p>
+    </div>
+    <div>
+      <button class="btn" id="adminBtn">Modo profesor</button>
+      <div class="pin" id="pinBox">
+        <input type="password" id="pinIn" inputmode="numeric" placeholder="PIN" aria-label="PIN del profesor">
+        <button class="btn solid" id="pinOk">Entrar</button>
+      </div>
+      <p class="hint hidden" id="pinErr" style="color:var(--flush)">PIN incorrecto.</p>
+    </div>
+  </header>
+
+  <section class="admin hidden" id="admin" aria-label="Panel del profesor">
+    <h2>Panel del profesor</h2>
+    <div class="form">
+      <div>
+        <div class="field">
+          <div class="row" style="justify-content:space-between"><label class="f" for="src">Programa (máximo 20 instrucciones)</label><span class="count" id="count">0/20</span></div>
+          <textarea id="src" rows="13" spellcheck="false"></textarea>
+          <p class="hint">Soporta add, sub, and, or, xor, sll, srl, slt, addi, andi, ori, xori, slli, ld, lw, sd, sw, beq, bne y nop. Puedes usar etiquetas (<code>loop:</code>). Una instrucción inválida o mal escrita se carga igual y provoca una excepción de instrucción no definida en ID.</p>
+          <div id="parseMsg"></div>
+        </div>
+        <div class="field">
+          <label class="f" for="hsrc">Manejador de excepciones (en 0x1C090000)</label>
+          <textarea id="hsrc" rows="3" spellcheck="false"></textarea>
+        </div>
+      </div>
+      <div>
+        <div class="field">
+          <label class="f" for="preset">Ejemplos listos</label>
+          <div class="row"><select id="preset" style="flex:1;border:1px solid var(--line);background:var(--paper);border-radius:8px;padding:8px;min-height:40px"></select><button class="btn" id="usePreset">Usar ejemplo</button></div>
+        </div>
+        <div class="field">
+          <label class="f" for="pc0">Dirección inicial del PC</label>
+          <input type="text" id="pc0" spellcheck="false">
+        </div>
+        <div class="field">
+          <label class="f" for="rinit">Registros iniciales</label>
+          <input type="text" id="rinit" spellcheck="false" placeholder="x2=0x7FFFFFFFFFFFFFFF, x1=1">
+          <p class="hint">Por defecto cada registro xN vale N (x0 siempre es 0).</p>
+        </div>
+        <div class="field">
+          <label class="f" for="minit">Memoria inicial</label>
+          <input type="text" id="minit" spellcheck="false" placeholder="0x100=42, 264=7">
+        </div>
+        <label class="sw"><input type="checkbox" id="fwd"> Unidad de forwarding</label>
+        <label class="sw"><input type="checkbox" id="hdu"> Unidad de detección de riesgos (stalls)</label>
+        <div class="row" style="margin-top:10px"><button class="btn solid" id="load">Cargar y simular</button><button class="btn" id="logout">Salir del modo profesor</button></div>
+        <div class="field" style="margin-top:16px">
+          <label class="f" for="newPin">Cambiar PIN</label>
+          <div class="row"><input type="password" id="newPin" style="flex:1" placeholder="Nuevo PIN"><button class="btn" id="savePin">Guardar PIN</button></div>
+          <p class="hint" id="pinHint">PIN inicial: 1234. Se guarda solo en este navegador.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="bar">
+    <div class="ctrl">
+      <button class="icon" id="bReset" aria-label="Volver al ciclo 0" title="Volver al inicio">⏮</button>
+      <button class="icon" id="bBack" aria-label="Ciclo anterior" title="Ciclo anterior">◀</button>
+      <button class="icon play" id="bPlay" aria-label="Reproducir" title="Reproducir / pausar">▶</button>
+      <button class="icon" id="bNext" aria-label="Ciclo siguiente" title="Ciclo siguiente">▶︎|</button>
+      <div class="cyc" id="cyc">Ciclo 0</div>
+      <input type="range" id="slider" min="0" max="0" value="0" aria-label="Ciclo">
+      <select id="speed" aria-label="Velocidad"><option value="1600">Lento</option><option value="900" selected>Normal</option><option value="400">Rápido</option></select>
+    </div>
+    <div class="chips" id="chips"></div>
+  </div>
+
+  <section>
+    <div class="panel">
+      <div class="dpwrap"><svg id="dp" viewBox="0 0 1000 472" role="img" aria-label="Datapath canalizado"></svg></div>
+      <div class="legend">
+        <span><i style="background:var(--fwd)"></i>Forwarding</span>
+        <span><i style="background:var(--stall)"></i>Stall / burbuja</span>
+        <span><i style="background:var(--flush)"></i>Flush / excepción</span>
+        <span><i style="background:var(--br)"></i>Salto tomado</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="grid2">
+    <div>
+      <h2>Qué pasa en este ciclo</h2>
+      <ul class="log" id="log" aria-live="polite"></ul>
+    </div>
+    <div>
+      <h2>Programa cargado</h2>
+      <div class="panel"><ul class="prog" id="prog"></ul></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Diagrama multiciclo</h2>
+    <div class="tablewrap" id="mcwrap"><table class="mc" id="mc"></table></div>
+    <p class="hint">Rayado azul: instrucción detenida (stall). Tachado rojo: instrucción descartada por flush. Rojo sólido: etapa donde se detecta la excepción.</p>
+  </section>
+
+  <section class="grid2">
+    <div>
+      <h2>Banco de registros</h2>
+      <div class="panel"><div class="regs" id="regs"></div></div>
+    </div>
+    <div>
+      <h2>Excepción</h2>
+      <div class="exc-box" id="excBox"></div>
+      <h2 style="margin-top:18px">Memoria de datos</h2>
+      <div class="panel"><div class="kv" id="mem"></div></div>
+    </div>
+  </section>
+</div>
+
+<script>
+// ===== Motor del pipeline RISC-V de 5 etapas =====
+const HANDLER_PC = 0x1C090000;
+const MAX_CYCLES = 150;
+const R_OPS=['add','sub','and','or','xor','sll','srl','slt'];
+const I_OPS=['addi','andi','ori','xori','slli'];
+const L_OPS=['ld','lw'], S_OPS=['sd','sw'], B_OPS=['beq','bne'];
+
+function parseReg(t){
+  t=(t||'').toLowerCase();
+  if(t==='zero') return 0;
+  const m=t.match(/^x([0-9]|[12][0-9]|3[01])$/);
+  if(!m) throw new Error(`"${t||'?'}" no es un registro válido (usa x0 a x31)`);
+  return parseInt(m[1]);
+}
+function parseNum(t){
+  if(t==null||t==='') throw new Error('falta un número');
+  let s=String(t).trim(), neg=false;
+  if(s[0]==='-'){neg=true;s=s.slice(1)} else if(s[0]==='+') s=s.slice(1);
+  if(!/^(0x[0-9a-f]+|\d+)$/i.test(s)) throw new Error(`"${t}" no es un número válido`);
+  const v=BigInt(s.toLowerCase());
+  return neg?-v:v;
+}
+function decode(text,i,labels){
+  const base={text, idx:i, op:'?', cls:'invalid', rd:0, rs1:0, rs2:0, imm:0n};
+  const tk=text.replace(/,/g,' ').replace(/\s+/g,' ').trim().split(' ');
+  const op=tk[0].toLowerCase(), a=tk.slice(1);
+  try{
+    const need=n=>{ if(a.length!==n) throw new Error(`${op} necesita ${n} operandos y tiene ${a.length}`); };
+    if(op==='nop'){ need(0); return {...base,op,cls:'nop'}; }
+    if(R_OPS.includes(op)||op==='orr'){ need(3); return {...base,op:op==='orr'?'or':op,cls:'R',rd:parseReg(a[0]),rs1:parseReg(a[1]),rs2:parseReg(a[2])}; }
+    if(I_OPS.includes(op)){ need(3); return {...base,op,cls:'I',rd:parseReg(a[0]),rs1:parseReg(a[1]),imm:parseNum(a[2])}; }
+    if(L_OPS.includes(op)||S_OPS.includes(op)){
+      need(2);
+      const mm=a[1].match(/^(.*)\((.+)\)$/);
+      if(!mm) throw new Error('el formato debe ser desplazamiento(registro), por ejemplo 8(x10)');
+      const off=mm[1]===''?0n:parseNum(mm[1]);
+      if(L_OPS.includes(op)) return {...base,op,cls:'L',rd:parseReg(a[0]),rs1:parseReg(mm[2]),imm:off};
+      return {...base,op,cls:'S',rs2:parseReg(a[0]),rs1:parseReg(mm[2]),imm:off};
+    }
+    if(B_OPS.includes(op)){
+      need(3);
+      const off=(labels&&Object.prototype.hasOwnProperty.call(labels,a[2]))?BigInt((labels[a[2]]-i)*4):parseNum(a[2]);
+      return {...base,op,cls:'B',rs1:parseReg(a[0]),rs2:parseReg(a[1]),imm:off};
+    }
+    return {...base,op,err:`"${op}" no es una instrucción del conjunto soportado`};
+  }catch(e){ return {...base,op,err:e.message}; }
+}
+function parseProgram(src,max){
+  const raw=[], labels={}, errors=[];
+  src.split('\n').forEach((line,n)=>{
+    let l=line.replace(/(#|\/\/).*$/,'').trim();
+    if(!l) return;
+    const m=l.match(/^([A-Za-z_]\w*):\s*(.*)$/);
+    if(m){ labels[m[1]]=raw.length; l=m[2].trim(); if(!l) return; }
+    raw.push({src:l,line:n+1});
+  });
+  if(raw.length>max) errors.push(`Se permiten máximo ${max} instrucciones y hay ${raw.length}. Solo se cargan las primeras ${max}.`);
+  const insts=raw.slice(0,max).map((x,i)=>({...decode(x.src,i,labels),line:x.line}));
+  return {insts,errors};
+}
+function parseAssign(src,isReg){
+  const out=[], errs=[];
+  (src||'').split(/[,;\n]/).map(s=>s.trim()).filter(Boolean).forEach(p=>{
+    const m=p.match(/^(.+?)\s*=\s*(.+)$/);
+    if(!m){errs.push(`"${p}" debe tener la forma ${isReg?'x5=10':'0x100=42'}`);return;}
+    try{
+      const k=isReg?parseReg(m[1].trim()):parseNum(m[1].replace(/^mem\[|\]$/g,'').trim());
+      out.push([k,BigInt.asIntN(64,parseNum(m[2].trim()))]);
+    }catch(e){errs.push(e.message);}
+  });
+  return {out,errs};
+}
+
+const writes=x=>!!x&&!x.bubble&&(x.cls==='R'||x.cls==='I'||x.cls==='L')&&x.rd!==0;
+const uses1=x=>['R','I','L','S','B'].includes(x.cls);
+const uses2=x=>['R','S','B'].includes(x.cls);
+function fmt(v){ if(v>=-99999n&&v<=999999n) return v.toString(); return '0x'+BigInt.asUintN(64,v).toString(16).toUpperCase(); }
+function hex(n){ return '0x'+BigInt.asUintN(64,BigInt(n)).toString(16).toUpperCase(); }
+function aluOp(op,x,y){
+  switch(op){
+    case 'add':case 'addi':case 'ld':case 'lw':case 'sd':case 'sw': return x+y;
+    case 'sub':case 'beq':case 'bne': return x-y;
+    case 'and':case 'andi': return x&y;
+    case 'or':case 'ori': return x|y;
+    case 'xor':case 'xori': return x^y;
+    case 'sll':case 'slli': return x<<(y&63n);
+    case 'srl': return BigInt.asUintN(64,x)>>(y&63n);
+    case 'slt': return x<y?1n:0n;
+  }
+  return 0n;
+}
+
+function simulate(cfg){
+  const imem=new Map();
+  cfg.prog.forEach((x,i)=>imem.set(cfg.startPC+4*i,x));
+  cfg.handler.forEach((x,i)=>imem.set(HANDLER_PC+4*i,x));
+  const rows=[]; let colorN=0;
+  const mkInst=(s,pc)=>{ const col=colorN++; rows.push({label:s.text,pc,cells:{},color:col,handler:pc>=HANDLER_PC,order:rows.length}); return {...s,pc,row:rows.length-1,color:col}; };
+  const mkBubble=(before)=>{ rows.push({label:'burbuja (nop)',pc:null,cells:{},bubble:true,order:before-0.5}); return {bubble:true,text:'burbuja',cls:'bubble',rd:0,row:rows.length-1}; };
+  let st={pc:cfg.startPC,regs:cfg.regs.slice(),mem:new Map(cfg.mem),IFID:null,IDEX:null,EXMEM:null,MEMWB:null,ifHold:null,sepc:null,scause:null};
+  const snaps=[{cycle:0,pc:st.pc,npc:st.pc,regs:st.regs,mem:st.mem,changedRegs:[],memChanged:null,occ:{},sig:{},sepc:null,scause:null,
+    ev:[{k:'info',t:`Estado inicial. El PC arranca en ${hex(st.pc)}. Avanza ciclo a ciclo para ver la canalización.`}]}];
+
+  for(let c=1;c<=MAX_CYCLES;c++){
+    const p=st, regs=p.regs.slice(), mem=new Map(p.mem), ev=[], sig={}, occ={}, changedRegs=[]; let memChanged=null;
+    const mark=(x,s,f)=>{ if(x&&x.row!=null) rows[x.row].cells[c]={s,f:f||''}; };
+
+    // ---- WB ----
+    const wb=p.MEMWB;
+    if(wb){ occ.WB=wb; mark(wb,'WB');
+      if(writes(wb)){ regs[wb.rd]=wb.val; changedRegs.push(wb.rd); sig.regWrite=true;
+        ev.push({k:'info',t:`WB: ${wb.text} escribe ${fmt(wb.val)} en x${wb.rd} (en la primera mitad del ciclo).`}); } }
+
+    // ---- MEM ----
+    const m=p.EXMEM; let nMEMWB=null;
+    if(m){ occ.MEM=m; mark(m,'MEM');
+      if(m.bubble) nMEMWB=m;
+      else { let val=m.alu;
+        if(m.cls==='L'){ let v=mem.get(String(m.alu))??0n; if(m.op==='lw') v=BigInt.asIntN(32,v); val=v; sig.memRead=true;
+          ev.push({k:'info',t:`MEM: ${m.text} lee ${fmt(v)} de la dirección ${hex(m.alu)}.`}); }
+        if(m.cls==='S'){ let v=m.storeVal; if(m.op==='sw') v=BigInt.asIntN(32,v); mem.set(String(m.alu),v); memChanged=String(m.alu); sig.memWrite=true;
+          ev.push({k:'info',t:`MEM: ${m.text} guarda ${fmt(v)} en la dirección ${hex(m.alu)}.`}); }
+        nMEMWB={...m,val}; } }
+
+    // ---- EX ----
+    const e=p.IDEX; let nEXMEM=null, exExc=null;
+    if(e){ occ.EX=e;
+      if(e.bubble){ mark(e,'EX'); nEXMEM=e; }
+      else if(e.cls==='nop'){ nEXMEM={...e,alu:0n,storeVal:0n}; }
+      else {
+        let a=e.rs1v, b=e.rs2v;
+        if(cfg.fwd){
+          const src=r=>{ if(!r) return null;
+            if(writes(m)&&m.rd===r) return {v:m.alu,from:'EX/MEM',ins:m};
+            if(writes(wb)&&wb.rd===r) return {v:wb.val,from:'MEM/WB',ins:wb};
+            return null; };
+          if(uses1(e)){ const f=src(e.rs1); if(f){ a=f.v; sig.fwdA=f.from;
+            ev.push({k:'fwd',t:`Forwarding ${f.from} → entrada A de la ALU: x${e.rs1} = ${fmt(f.v)}, que viene de ${f.ins.text}.`});
+            if(f.from==='EX/MEM'&&f.ins.cls==='L') ev.push({k:'warn',t:`⚠ El dato de ${f.ins.text} todavía no ha salido de memoria: lo que llega por EX/MEM es la dirección, no el dato. Por eso hace falta la unidad de detección de riesgos.`}); } }
+          if(uses2(e)){ const f=src(e.rs2); if(f){ b=f.v; sig.fwdB=f.from;
+            ev.push({k:'fwd',t:`Forwarding ${f.from} → ${e.cls==='S'?'dato a guardar':'entrada B de la ALU'}: x${e.rs2} = ${fmt(f.v)}, que viene de ${f.ins.text}.`});
+            if(f.from==='EX/MEM'&&f.ins.cls==='L') ev.push({k:'warn',t:`⚠ El dato de ${f.ins.text} todavía no ha salido de memoria: lo que llega por EX/MEM es la dirección, no el dato.`}); } }
+        }
+        const y=(e.cls==='R'||e.cls==='B')?b:e.imm;
+        const raw=aluOp(e.op,a,y), res=BigInt.asIntN(64,raw);
+        if(['add','sub','addi'].includes(e.op)&&raw!==res){
+          exExc={cause:'Desbordamiento aritmético (overflow)',ins:e,where:'EX'};
+          mark(e,'EX','exc');
+        } else {
+          mark(e,'EX'); nEXMEM={...e,alu:res,storeVal:b}; sig.alu=true;
+          if(e.cls==='L'||e.cls==='S') ev.push({k:'info',t:`EX: ${e.text} calcula la dirección ${fmt(a)} + ${fmt(e.imm)} = ${hex(res)}.`});
+          else if(e.cls!=='B') ev.push({k:'info',t:`EX: ${e.text} → la ALU da ${fmt(res)}.`});
+        }
+      } }
+
+    // ---- ID ----
+    const d=p.IFID; let nIDEX=null, idExc=null, stallReason=null, stall=false, brTaken=false, brTarget=0; const idMsgs=[];
+    if(d){ occ.ID=d;
+      if(d.cls==='invalid'){ idExc={cause:'Instrucción no definida',detail:d.err,ins:d,where:'ID'}; }
+      else if(d.cls==='nop'){ nIDEX={...d,rs1v:0n,rs2v:0n}; }
+      else {
+        const deps=[]; if(uses1(d)&&d.rs1) deps.push(d.rs1); if(uses2(d)&&d.rs2&&!deps.includes(d.rs2)) deps.push(d.rs2);
+        const eW=writes(e)&&deps.includes(e.rd), mW=writes(m)&&deps.includes(m.rd);
+        if(cfg.fwd){
+          if(eW&&e.cls==='L') stallReason=`riesgo load-use: ${d.text} necesita x${e.rd}, pero ${e.text} todavía no lo ha leído de memoria`;
+          else if(d.cls==='B'&&eW) stallReason=`el salto se decide en ID y necesita x${e.rd}, que ${e.text} apenas está calculando en EX`;
+          else if(d.cls==='B'&&mW&&m.cls==='L') stallReason=`el salto necesita x${m.rd}, que ${m.text} está leyendo de memoria en este ciclo`;
+        } else {
+          if(eW) stallReason=`sin forwarding, ${d.text} debe esperar a que ${e.text} escriba x${e.rd} en WB`;
+          else if(mW) stallReason=`sin forwarding, ${d.text} debe esperar a que ${m.text} escriba x${m.rd} en WB`;
+        }
+        if(stallReason){
+          if(cfg.hdu) stall=true;
+          else idMsgs.push({k:'warn',t:`⚠ Unidad de detección de riesgos apagada: ${stallReason}. La instrucción continúa con un valor viejo o incorrecto.`});
+        }
+        if(!stall){
+          const v1=regs[d.rs1], v2=regs[d.rs2];
+          if(d.cls==='B'){
+            let x=v1, yv=v2;
+            if(cfg.fwd&&writes(m)){
+              if(m.rd===d.rs1){x=m.alu; sig.fwdBr=true; idMsgs.push({k:'fwd',t:`Forwarding EX/MEM → comparador del salto: x${m.rd} = ${fmt(m.alu)}.`});}
+              if(m.rd===d.rs2){yv=m.alu; sig.fwdBr=true; idMsgs.push({k:'fwd',t:`Forwarding EX/MEM → comparador del salto: x${m.rd} = ${fmt(m.alu)}.`});}
+            }
+            const eq=x===yv; brTaken=d.op==='beq'?eq:!eq; brTarget=d.pc+Number(d.imm);
+            idMsgs.push(brTaken
+              ?{k:'flush',t:`ID: ${d.text} compara ${fmt(x)} y ${fmt(yv)} y el salto SÍ se toma. Nuevo PC = ${hex(brTarget)}. La instrucción que se estaba buscando en IF se descarta (IF.Flush).`}
+              :{k:'info',t:`ID: ${d.text} compara ${fmt(x)} y ${fmt(yv)} y el salto no se toma. Se sigue con PC + 4 (predicción "no tomado" acertada).`});
+          }
+          nIDEX={...d,rs1v:v1,rs2v:v2};
+        }
+      } }
+
+    // ---- IF ----
+    let f=null;
+    if(p.ifHold) f=p.ifHold; else { const s=imem.get(p.pc); if(s) f=mkInst(s,p.pc); }
+    if(f) occ.IF=f;
+
+    // ---- Resolución: excepciones > stall > salto > normal ----
+    let npc=p.pc, nIFID=null, ifHold=null, sepc=p.sepc, scause=p.scause;
+    if(exExc){
+      sig.exc='EX'; sig.ifFlush=sig.idFlush=sig.exFlush=true;
+      if(f) mark(f,'IF','flush'); if(d) mark(d,'ID','flush');
+      nIFID=null; nIDEX=null; nEXMEM=null; npc=HANDLER_PC; sepc=exExc.ins.pc; scause=exExc.cause;
+      ev.push({k:'exc',t:`Excepción en EX: ${exExc.cause} en ${exExc.ins.text}. SEPC ← ${hex(sepc)} y SCAUSE ← "${scause}".`});
+      ev.push({k:'flush',t:`Se vacían IF, ID y EX (IF.Flush, ID.Flush, EX.Flush): ${[f&&f.text,d&&!d.bubble&&d.text,exExc.ins.text].filter(Boolean).join(', ')} no llegan a escribir nada. Las instrucciones que van en MEM y WB sí terminan. El PC salta al manejador en ${hex(HANDLER_PC)}.`});
+    } else if(idExc){
+      ev.push(...idMsgs.filter(x=>x.k==='warn'));
+      sig.exc='ID'; sig.ifFlush=sig.idFlush=true;
+      mark(d,'ID','exc'); if(f) mark(f,'IF','flush');
+      nIFID=null; nIDEX=null; npc=HANDLER_PC; sepc=d.pc; scause=idExc.cause;
+      ev.push({k:'exc',t:`Excepción en ID: ${d.text} no es una instrucción válida (${idExc.detail}). SEPC ← ${hex(sepc)} y SCAUSE ← "${scause}".`});
+      ev.push({k:'flush',t:`Se vacían IF e ID (IF.Flush, ID.Flush) y el PC salta al manejador en ${hex(HANDLER_PC)}.`});
+    } else if(stall){
+      sig.stall=true; mark(d,'ID','stall'); if(f) mark(f,'IF','stall');
+      nIFID=d; ifHold=f; nIDEX=mkBubble(d.row); npc=p.pc;
+      ev.push({k:'stall',t:`Stall: ${stallReason}. Se mete una burbuja en ID/EX y se congelan el PC y el registro IF/ID.`});
+    } else {
+      if(d) mark(d,'ID'); ev.push(...idMsgs);
+      if(brTaken){ sig.ifFlush=true; sig.branch=true; if(f) mark(f,'IF','flush'); nIFID=null; npc=brTarget; }
+      else if(f){ mark(f,'IF'); nIFID=f; npc=p.pc+4; }
+    }
+    if(!ev.length) ev.push({k:'info',t:'Ciclo sin eventos especiales.'});
+    st={pc:npc,regs,mem,IFID:nIFID,IDEX:nIDEX,EXMEM:nEXMEM,MEMWB:nMEMWB,ifHold,sepc,scause};
+    const done=!nIFID&&!nIDEX&&!nEXMEM&&!nMEMWB&&!ifHold&&!imem.has(npc);
+    if(done) ev.push({k:'done',t:'La canalización quedó vacía: el programa terminó.'});
+    snaps.push({cycle:c,pc:p.pc,npc,regs,mem,changedRegs,memChanged,occ,sig,sepc,scause,ev,stall,
+      pipe:{IFID:nIFID,IDEX:nIDEX,EXMEM:nEXMEM,MEMWB:nMEMWB}});
+    if(done) break;
+  }
+  return {snaps,rows};
+}
+
+
+</script>
+<script>
+const PAL=['#3B7FC4','#2A9A68','#8C58C6','#D47C22','#C4437A','#1E97A6','#A8941A','#5866D2','#C04F38','#6A962C'];
+const colorOf=x=>x&&x.row!=null&&!x.bubble?PAL[x.color%PAL.length]:null;
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const $=id=>document.getElementById(id);
+
+const PRESETS=[
+ {name:'Ejemplo de clase: excepción por overflow en add',src:'sub x11, x2, x4\nand x12, x2, x5\norr x13, x2, x6\nadd x1, x2, x1\nsub x15, x6, x7\nld  x16, 100(x7)',pc:'0x40',regs:'x2=0x7FFFFFFFFFFFFFFF, x1=1',mem:'',fwd:true,hdu:true},
+ {name:'Forwarding desde EX/MEM y MEM/WB',src:'sub x2, x1, x3\nand x12, x2, x5\nor  x13, x6, x2\nadd x14, x2, x2\nsd  x15, 100(x2)',pc:'0x0',regs:'x1=10, x3=3',mem:'',fwd:true,hdu:true},
+ {name:'Riesgo load-use (stall + burbuja)',src:'ld  x2, 0(x10)\nadd x4, x2, x5\nsub x6, x2, x4\nor  x7, x6, x2',pc:'0x0',regs:'x10=0x100',mem:'0x100=40',fwd:true,hdu:true},
+ {name:'Salto tomado y flush (bucle)',src:'addi x1, x0, 3\nloop: addi x1, x1, -1\nadd  x5, x5, x1\nbne  x1, x0, loop\nadd  x9, x5, x1',pc:'0x0',regs:'x5=0',mem:'',fwd:true,hdu:true},
+ {name:'Instrucción inválida (excepción en ID)',src:'add x1, x2, x3\nmult x5, x6, x7\nadd x8, x1, x1\nsub x9, x8, x2',pc:'0x0',regs:'',mem:'',fwd:true,hdu:true},
+ {name:'Sin forwarding: más stalls',src:'add x1, x2, x3\nsub x4, x1, x5\nand x6, x1, x7\nor  x8, x1, x9',pc:'0x0',regs:'',mem:'',fwd:false,hdu:true},
+ {name:'Sin detección de riesgos: resultado incorrecto',src:'ld  x2, 0(x10)\nadd x4, x2, x5\nsd  x4, 8(x10)',pc:'0x0',regs:'x10=0x100',mem:'0x100=40',fwd:true,hdu:false}
+];
+const DEF_HANDLER='sd x26, 1000(x10)\nsd x27, 1008(x10)';
+const store={get(k){try{return localStorage.getItem(k)}catch(e){return null}},set(k,v){try{localStorage.setItem(k,v)}catch(e){}}};
+
+let cfg=(()=>{ try{const c=JSON.parse(store.get('pipeRV:cfg')||'null'); if(c&&typeof c.src==='string') return c;}catch(e){} const p=PRESETS[0]; return {src:p.src,handler:DEF_HANDLER,pc:p.pc,regs:p.regs,mem:p.mem,fwd:p.fwd,hdu:p.hdu}; })();
+let sim=null, idx=0, timer=null, parsed=null;
+
+function build(){
+  const msgs=[], warns=[];
+  const pr=parseProgram(cfg.src,20); msgs.push(...pr.errors);
+  const hr=parseProgram(cfg.handler||'',10); msgs.push(...hr.errors.map(x=>'Manejador: '+x));
+  pr.insts.filter(x=>x.cls==='invalid').forEach(x=>warns.push(`Línea ${x.line}: ${x.err}. Se cargará como instrucción no definida y provocará una excepción en ID.`));
+  hr.insts.filter(x=>x.cls==='invalid').forEach(x=>warns.push(`Manejador, línea ${x.line}: ${x.err}.`));
+  let start=0; try{ start=Number(BigInt.asUintN(32,parseNum(cfg.pc||'0'))); if(start%4){msgs.push('El PC inicial debe ser múltiplo de 4; se usó 0x0.');start=0;} }catch(e){ msgs.push('PC inicial: '+e.message); }
+  const regs=Array.from({length:32},(_,i)=>BigInt(i));
+  const ra=parseAssign(cfg.regs,true); ra.out.forEach(([k,v])=>regs[k]=v); regs[0]=0n; msgs.push(...ra.errs.map(x=>'Registros: '+x));
+  const ma=parseAssign(cfg.mem,false); msgs.push(...ma.errs.map(x=>'Memoria: '+x));
+  const mem=new Map(ma.out.map(([k,v])=>[String(k),v]));
+  parsed={prog:pr.insts,start};
+  sim=simulate({prog:pr.insts,handler:hr.insts,startPC:start,regs,mem,fwd:!!cfg.fwd,hdu:!!cfg.hdu});
+  idx=0; stop();
+  $('slider').max=sim.snaps.length-1;
+  $('parseMsg').innerHTML=(msgs.length?`<div class="errs"><b>Revisa esto:</b><ul>${msgs.map(m=>`<li>${esc(m)}</li>`).join('')}</ul></div>`:'')+(warns.length?`<div class="errs warn"><b>Instrucciones con error:</b><ul>${warns.map(m=>`<li>${esc(m)}</li>`).join('')}</ul></div>`:'');
+  renderProg(); render();
+}
+
+function renderProg(){
+  $('prog').innerHTML=parsed.prog.map((x,i)=>`<li class="${x.cls==='invalid'?'bad':''}"><span class="a">${hex(parsed.start+4*i)}</span><span>${esc(x.text)}</span></li>`).join('')||'<li class="muted">No hay instrucciones. Entra al modo profesor para cargar un programa.</li>';
+  $('chips').innerHTML=`<span class="tag on">Forwarding: <b>${cfg.fwd?'activo':'apagado'}</b></span><span class="tag on">Detección de riesgos: <b>${cfg.hdu?'activa':'apagada'}</b></span><span class="tag">Saltos: se deciden en ID, predicción no tomado</span><span class="tag">${parsed.prog.length}/20 instrucciones</span>`;
+}
+
+/* ===== Datapath SVG ===== */
+function svgDP(s){
+  const o=s.occ||{}, g=s.sig||{};
+  const col=k=>colorOf(o[k]);
+  const W='var(--wire)', D='var(--wire-dim)';
+  const stroke=k=>col(k)||D, sw=k=>col(k)?2.6:1.4;
+  const P=(d,k,extra='')=>`<path d="${d}" fill="none" stroke="${typeof k==='string'&&k.startsWith('var')?k:stroke(k)}" stroke-width="${typeof k==='string'&&k.startsWith('var')?1.4:sw(k)}" ${extra}/>`;
+  const HL=(d,c,on,w=3.4)=>on?`<path d="${d}" fill="none" stroke="${c}" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round"/>`:'';
+  const box=(x,y,w,h,label,k,fill,rx=6)=>`<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${rx}" fill="${fill||'var(--panel)'}" stroke="${col(k)||W}" stroke-width="1.6"/><text x="${x+w/2}" y="${y+h/2}" text-anchor="middle" dominant-baseline="middle" font-size="12" fill="var(--ink)">${label}</text>`;
+  const mux=(x,y,h,k,hl)=>`<rect x="${x}" y="${y}" width="18" height="${h}" rx="9" fill="var(--panel)" stroke="${hl||col(k)||W}" stroke-width="${hl?2.6:1.6}"/><text x="${x+9}" y="${y+h/2}" text-anchor="middle" dominant-baseline="middle" font-size="10" fill="var(--ink)">M</text>`;
+  const stages=[['IF','Búsqueda',8,192],['ID','Decodificación',224,198],['EX','Ejecución',454,198],['MEM','Memoria',684,148],['WB','Escritura',864,128]];
+  let h='';
+  // fondos por etapa
+  stages.forEach(([k,n,x,w])=>{ const c=col(k); h+=`<rect x="${x}" y="64" width="${w}" height="380" rx="8" fill="${c||'transparent'}" fill-opacity="${c?0.08:0}"/>`; });
+  // encabezados
+  stages.forEach(([k,n,x,w])=>{ const ins=o[k]; const c=col(k);
+    let t=ins?(ins.bubble?'burbuja':ins.text):'—'; if(t.length>24) t=t.slice(0,23)+'…';
+    const fl=ins&&ins.row!=null&&sim.rows[ins.row].cells[s.cycle];
+    const flag=fl?fl.f:''; const fc=flag==='flush'?'var(--flush)':flag==='exc'?'var(--flush)':flag==='stall'?'var(--stall)':null;
+    h+=`<text x="${x+6}" y="18" font-size="13" font-weight="700" fill="var(--wire)">${k} <tspan font-weight="400" fill="var(--muted)">${n}</tspan></text>`;
+    h+=`<rect x="${x+2}" y="26" width="${w-4}" height="28" rx="6" fill="${c||'var(--chip)'}" fill-opacity="${c?1:1}" stroke="${fc||(c?'none':'var(--line)')}" stroke-width="${fc?2.5:1}" ${flag==='flush'?'stroke-dasharray="5 3"':''}/>`;
+    h+=`<text x="${x+w/2}" y="41" text-anchor="middle" dominant-baseline="middle" font-size="12.5" font-family="IBM Plex Mono,monospace" font-weight="600" fill="${c?'#fff':'var(--muted)'}" ${flag==='flush'?'text-decoration="line-through"':''}>${esc(t)}${flag==='stall'?' ⏸':flag==='exc'?' ⚠':''}</text>`;
+  });
+  // cables base
+  h+=P('M44 247 H58','IF')+P('M92 247 H106','IF')+P('M75 228 V129 H118','IF')+P('M136 112 V96 H16 V236 H26','IF')+P('M184 240 H200','IF');
+  h+=P('M216 232 H240','ID')+P('M216 262 H240','ID')+P('M216 150 H237','ID')+P('M216 366 H251','ID')+P('M216 95 H232','ID')+P('M216 178 H352 V155 H366','ID');
+  h+=P('M340 232 H430','ID')+P('M340 292 H430','ID')+P('M385 232 V245','ID')+P('M385 292 V275','ID')+P('M319 366 H430','ID')+P('M352 348 V166 H366','ID')+P('M313 150 H430','ID');
+  h+=P('M446 227 H470','EX')+P('M446 297 H470','EX')+P('M446 366 H466 V312 H470','EX')+P('M488 227 H520','EX')+P('M488 297 H520','EX')+P('M570 260 H660','EX')+P('M496 297 V334 H660','EX')+P('M446 150 H660','EX');
+  h+=P('M676 240 H690','MEM')+P('M676 334 H682 V292 H690','MEM')+P('M676 262 H686 V348 H840','MEM')+P('M810 258 H840','MEM')+P('M676 150 H840','MEM');
+  h+=P('M856 258 H885','WB')+P('M856 348 H872 V272 H885','WB')+P('M905 250 H960 V438 H228 V302 H240','WB');
+  // salto tomado
+  h+=P('M401 155 H414 V72 H12 V252 H26','var(--wire-dim)');
+  h+=HL('M401 155 H414 V72 H12 V252 H26','var(--br)',g.branch);
+  // excepción: constante del manejador
+  h+=`<text x="2" y="296" font-size="10.5" font-family="IBM Plex Mono,monospace" fill="${g.exc?'var(--flush)':'var(--muted)'}" font-weight="${g.exc?700:400}">1C090000</text>`+P('M20 284 V268 H26','var(--wire-dim)');
+  h+=HL('M20 284 V268 H26','var(--flush)',!!g.exc);
+  // forwarding
+  h+=HL('M682 262 V362 H455 V237 H470','var(--fwd)',g.fwdA==='EX/MEM');
+  h+=HL('M682 262 V362 H455 V307 H470','var(--fwd)',g.fwdB==='EX/MEM');
+  h+=HL('M960 250 V374 H461 V219 H470','var(--fwd)',g.fwdA==='MEM/WB');
+  h+=HL('M960 250 V374 H461 V289 H470','var(--fwd)',g.fwdB==='MEM/WB');
+  h+=HL('M682 262 V192 H412 V260 H400','var(--fwd)',!!g.fwdBr);
+  if(g.fwdA||g.fwdB) h+=`<path d="M560 385 V340" stroke="var(--fwd)" stroke-width="2" stroke-dasharray="4 3"/>`;
+  // componentes IF
+  h+=mux(26,222,60,'IF',g.exc?'var(--flush)':g.branch?'var(--br)':null);
+  h+=box(58,228,34,38,'PC','IF',g.stall?'color-mix(in srgb,var(--stall) 22%,var(--panel))':null);
+  h+=box(106,196,78,92,'<tspan x="145" dy="-7">Memoria de</tspan><tspan x="145" dy="15">instrucciones</tspan>','IF');
+  h+=box(118,112,36,34,'+4','IF');
+  // ID
+  h+=`<rect x="232" y="78" width="122" height="34" rx="8" fill="${g.stall?'var(--stall)':'var(--panel)'}" stroke="${g.stall?'var(--stall)':(col('ID')||W)}" stroke-width="1.6"/><text x="293" y="95" text-anchor="middle" dominant-baseline="middle" font-size="11.5" fill="${g.stall?'#fff':'var(--ink)'}">Detección de riesgos</text>`;
+  h+=`<ellipse cx="275" cy="150" rx="38" ry="20" fill="var(--panel)" stroke="${col('ID')||W}" stroke-width="1.6"/><text x="275" y="150" text-anchor="middle" dominant-baseline="middle" font-size="12" fill="var(--ink)">Control</text>`;
+  h+=box(240,200,100,122,'Registros','ID');
+  h+=`<circle cx="385" cy="260" r="15" fill="var(--panel)" stroke="${g.branch?'var(--br)':(col('ID')||W)}" stroke-width="${g.branch?2.6:1.6}"/><text x="385" y="261" text-anchor="middle" dominant-baseline="middle" font-size="14" fill="var(--ink)">=</text>`;
+  h+=`<ellipse cx="285" cy="366" rx="34" ry="18" fill="var(--panel)" stroke="${col('ID')||W}" stroke-width="1.6"/><text x="285" y="366" text-anchor="middle" dominant-baseline="middle" font-size="11.5" fill="var(--ink)">Imm Gen</text>`;
+  h+=box(366,140,35,30,'+','ID');
+  // EX
+  h+=mux(470,205,44,'EX',g.fwdA?'var(--fwd)':null)+mux(470,275,44,'EX',g.fwdB?'var(--fwd)':null);
+  const aluC=g.exc==='EX'?'var(--flush)':(col('EX')||W);
+  h+=`<polygon points="520,200 572,226 572,294 520,320 520,274 534,260 520,246" fill="${g.exc==='EX'?'color-mix(in srgb,var(--flush) 25%,var(--panel))':'var(--panel)'}" stroke="${aluC}" stroke-width="${g.exc==='EX'?2.6:1.6}"/><text x="551" y="261" text-anchor="middle" dominant-baseline="middle" font-size="12.5" fill="var(--ink)">ALU</text>`;
+  h+=`<rect x="498" y="385" width="126" height="34" rx="17" fill="${g.fwdA||g.fwdB?'var(--fwd)':'var(--panel)'}" stroke="${g.fwdA||g.fwdB?'var(--fwd)':W}" stroke-width="1.6"/><text x="561" y="402" text-anchor="middle" dominant-baseline="middle" font-size="11.5" fill="${g.fwdA||g.fwdB?'#fff':'var(--ink)'}">Unidad de forwarding</text>`;
+  const ex=!!g.exc;
+  h+=`<rect x="588" y="84" width="62" height="22" rx="3" fill="${ex?'var(--flush)':s.scause?'color-mix(in srgb,var(--flush) 18%,var(--panel))':'var(--panel)'}" stroke="${ex||s.scause?'var(--flush)':W}"/><text x="619" y="96" text-anchor="middle" dominant-baseline="middle" font-size="11" font-weight="600" fill="${ex?'#fff':'var(--ink)'}">SCAUSE</text>`;
+  h+=`<rect x="588" y="110" width="62" height="22" rx="3" fill="${ex?'var(--flush)':s.sepc!=null?'color-mix(in srgb,var(--flush) 18%,var(--panel))':'var(--panel)'}" stroke="${ex||s.sepc!=null?'var(--flush)':W}"/><text x="619" y="122" text-anchor="middle" dominant-baseline="middle" font-size="11" font-weight="600" fill="${ex?'#fff':'var(--ink)'}">SEPC</text>`;
+  // MEM
+  const memHL=g.memRead||g.memWrite;
+  h+=box(690,204,120,112,`<tspan x="750" dy="-7">Memoria de</tspan><tspan x="750" dy="15">datos</tspan>`,'MEM');
+  if(memHL) h+=`<text x="750" y="300" text-anchor="middle" font-size="11" font-weight="600" fill="${col('MEM')}">${g.memRead?'MemRead':'MemWrite'}</text>`;
+  // WB
+  h+=mux(885,222,56,'WB');
+  // registros de canalización
+  const bars=[['IF/ID',200,g.ifFlush,g.stall?'congelado':null,'IF.Flush'],['ID/EX',430,g.idFlush,g.stall?'burbuja':null,'ID.Flush'],['EX/MEM',660,g.exFlush,null,'EX.Flush'],['MEM/WB',840,false,null,'']];
+  bars.forEach(([n,x,fl,st,tag])=>{
+    const c=fl?'var(--flush)':st?'var(--stall)':W;
+    h+=`<rect x="${x}" y="70" width="16" height="372" rx="3" fill="${fl?'color-mix(in srgb,var(--flush) 30%,var(--panel))':st?'color-mix(in srgb,var(--stall) 25%,var(--panel))':'var(--panel)'}" stroke="${c}" stroke-width="${fl||st?2.4:1.6}"/>`;
+    h+=`<text x="${x+8}" y="64" text-anchor="middle" font-size="11" font-weight="600" fill="${c}">${n}</text>`;
+    if(fl) h+=`<path d="M${x-2} 238 L${x+18} 258 M${x+18} 238 L${x-2} 258" stroke="var(--flush)" stroke-width="3"/>`;
+    const lab=fl?tag:(st||tag);
+    if(lab) h+=`<text x="${x+8}" y="462" text-anchor="middle" font-size="11" font-weight="${fl||st?700:400}" fill="${fl?'var(--flush)':st?'var(--stall)':'var(--muted)'}">${lab}</text>`;
+  });
+  if(g.stall) h+=`<text x="75" y="286" text-anchor="middle" font-size="10.5" font-weight="700" fill="var(--stall)">PCWrite = 0</text>`;
+  return h;
+}
+
+/* ===== Render ===== */
+function render(){
+  const s=sim.snaps[idx], last=sim.snaps.length-1;
+  $('dp').innerHTML=svgDP(s);
+  $('cyc').innerHTML=`Ciclo ${s.cycle} <small>de ${last}</small>`;
+  $('slider').value=idx;
+  $('bBack').disabled=idx===0; $('bReset').disabled=idx===0; $('bNext').disabled=idx===last;
+  const K={fwd:'Forwarding',stall:'Stall',flush:'Flush',exc:'Excepción',warn:'Atención',done:'Fin',info:''};
+  $('log').innerHTML=s.ev.map(e=>`<li class="${e.k}">${K[e.k]?`<span class="k">${K[e.k]}</span>`:''}${esc(e.t)}</li>`).join('');
+  // diagrama multiciclo
+  const N=last, rows=sim.rows.map((r,i)=>({...r,i})).sort((a,b)=>a.order-b.order).filter(r=>Object.keys(r.cells).some(c=>+c<=s.cycle));
+  let t='<thead><tr><th style="text-align:left;padding-left:10px;position:sticky;left:0;z-index:2">Instrucción</th>';
+  for(let c=1;c<=N;c++) t+=`<th class="${c===s.cycle?'now':''}">${c}</th>`;
+  t+='</tr></thead><tbody>';
+  rows.forEach(r=>{
+    t+=`<tr class="${r.bubble?'bub':''}"><td class="lbl">${r.pc!=null?`<span class="pc">${hex(r.pc)}</span>`:''}${esc(r.label)}</td>`;
+    for(let c=1;c<=N;c++){
+      const x=c<=s.cycle?r.cells[c]:null;
+      if(!x){t+=`<td class="${c===s.cycle?'nowc':''}"></td>`;continue;}
+      const cls=['st',x.f,r.bubble?'bub':'',c===s.cycle?'nowc':''].join(' ');
+      t+=`<td class="${cls}" title="${x.f==='stall'?'Detenida (stall)':x.f==='flush'?'Descartada (flush)':x.f==='exc'?'Excepción':''}"><span style="background:${PAL[r.color%PAL.length]}">${x.s}${x.f==='exc'?'!':''}</span></td>`;
+    }
+    t+='</tr>';
+  });
+  t+='</tbody>';
+  $('mc').innerHTML=t;
+  const nowTh=$('mc').querySelector('th.now');
+  if(nowTh){ const w=$('mcwrap'); const left=nowTh.offsetLeft-w.clientWidth*0.6; if(left>w.scrollLeft||nowTh.offsetLeft<w.scrollLeft+200) w.scrollLeft=Math.max(0,left); }
+  // registros
+  $('regs').innerHTML=s.regs.map((v,i)=>`<div class="${(s.changedRegs||[]).includes(i)?'ch':''}"><b>x${i}</b><span>${fmt(v)}</span></div>`).join('');
+  const mem=[...s.mem.entries()].sort((a,b)=>BigInt(a[0])<BigInt(b[0])?-1:1);
+  $('mem').innerHTML=mem.length?mem.map(([k,v])=>`<div class="${s.memChanged===k?'ch':''}"><span>${hex(BigInt(k))}</span><span>${fmt(v)}</span></div>`).join(''):'<span class="muted">Vacía (todas las direcciones valen 0).</span>';
+  $('excBox').className='exc-box'+(s.sepc!=null?' set':'');
+  $('excBox').innerHTML=s.sepc!=null?`<div>SEPC = <code>${hex(s.sepc)}</code></div><div>SCAUSE = ${esc(s.scause)}</div><div class="muted" style="margin-top:4px">El manejador está en <code>0x1C090000</code>.</div>`:'<span class="muted">Ninguna por ahora. SEPC guarda la dirección de la instrucción que falló y SCAUSE el motivo.</span>';
+}
+
+/* ===== Reproducción ===== */
+function stop(){ clearInterval(timer); timer=null; $('bPlay').textContent='▶'; $('bPlay').setAttribute('aria-label','Reproducir'); }
+function play(){ if(idx>=sim.snaps.length-1) idx=0; render(); $('bPlay').textContent='⏸'; $('bPlay').setAttribute('aria-label','Pausar');
+  timer=setInterval(()=>{ if(idx>=sim.snaps.length-1){stop();return;} idx++; render(); },+$('speed').value); }
+$('bPlay').onclick=()=>timer?stop():play();
+$('bNext').onclick=()=>{stop(); if(idx<sim.snaps.length-1){idx++;render();}};
+$('bBack').onclick=()=>{stop(); if(idx>0){idx--;render();}};
+$('bReset').onclick=()=>{stop(); idx=0; render();};
+$('slider').oninput=e=>{stop(); idx=+e.target.value; render();};
+$('speed').onchange=()=>{ if(timer){stop();play();} };
+document.addEventListener('keydown',e=>{ if(/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) return;
+  if(e.key==='ArrowRight'){$('bNext').click();e.preventDefault();} else if(e.key==='ArrowLeft'){$('bBack').click();e.preventDefault();} else if(e.key===' '){$('bPlay').click();e.preventDefault();} });
+
+/* ===== Modo profesor ===== */
+const getPin=()=>store.get('pipeRV:pin')||'1234';
+function setAdmin(on){
+  $('admin').classList.toggle('hidden',!on); $('adminBtn').classList.toggle('hidden',on); $('pinBox').classList.remove('show'); $('pinErr').classList.add('hidden');
+  try{ on?sessionStorage.setItem('pipeRV:admin','1'):sessionStorage.removeItem('pipeRV:admin'); }catch(e){}
+  if(on) fillForm();
+}
+$('adminBtn').onclick=()=>{ $('pinBox').classList.toggle('show'); $('pinIn').focus(); };
+const tryPin=()=>{ if($('pinIn').value===getPin()){ $('pinIn').value=''; setAdmin(true); } else $('pinErr').classList.remove('hidden'); };
+$('pinOk').onclick=tryPin; $('pinIn').onkeydown=e=>{ if(e.key==='Enter') tryPin(); };
+$('logout').onclick=()=>setAdmin(false);
+$('savePin').onclick=()=>{ const v=$('newPin').value.trim(); if(v.length<3){$('pinHint').textContent='El PIN debe tener al menos 3 caracteres.';return;} store.set('pipeRV:pin',v); $('newPin').value=''; $('pinHint').textContent='PIN guardado en este navegador.'; };
+function fillForm(){ $('src').value=cfg.src; $('hsrc').value=cfg.handler??DEF_HANDLER; $('pc0').value=cfg.pc; $('rinit').value=cfg.regs; $('minit').value=cfg.mem; $('fwd').checked=!!cfg.fwd; $('hdu').checked=!!cfg.hdu; updCount(); }
+function updCount(){ const n=$('src').value.split('\n').map(l=>l.replace(/(#|\/\/).*$/,'').replace(/^[A-Za-z_]\w*:\s*/,'').trim()).filter(Boolean).length; $('count').textContent=`${n}/20`; $('count').classList.toggle('over',n>20); }
+$('src').oninput=updCount;
+$('preset').innerHTML=PRESETS.map((p,i)=>`<option value="${i}">${esc(p.name)}</option>`).join('');
+$('usePreset').onclick=()=>{ const p=PRESETS[+$('preset').value]; $('src').value=p.src; $('pc0').value=p.pc; $('rinit').value=p.regs; $('minit').value=p.mem; $('fwd').checked=p.fwd; $('hdu').checked=p.hdu; $('hsrc').value=DEF_HANDLER; updCount(); $('load').click(); };
+$('load').onclick=()=>{ cfg={src:$('src').value,handler:$('hsrc').value,pc:$('pc0').value.trim()||'0x0',regs:$('rinit').value,mem:$('minit').value,fwd:$('fwd').checked,hdu:$('hdu').checked}; store.set('pipeRV:cfg',JSON.stringify(cfg)); build(); };
+
+let wasAdmin=false; try{ wasAdmin=sessionStorage.getItem('pipeRV:admin')==='1'; }catch(e){}
+build(); if(wasAdmin) setAdmin(true);
+</script>
+</body>
+</html>
